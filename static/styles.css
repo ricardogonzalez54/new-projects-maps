@@ -1,0 +1,37 @@
+/* Define styles for your map container */
+
+#body {
+    position: relative;
+}
+#map {
+    position: relative;
+    top: 0px;
+    left: 0px;
+    width: 100%;
+    z-index: 0;
+    height: 100vh; /* Adjust as needed */
+}
+
+*{
+    z-index: 1;
+    margin: 0;
+    padding: 0;
+    text-decoration: none;
+  }
+  :root {
+    --accent-color: #fff;
+    --gradient-color: #FBFBFB;
+  }
+  body{
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+     width: 100vw;
+    height: 100vh;
+    background-image: linear-gradient(-45deg, #e3eefe 0%, #efddfb 100%);
+  }
+  
+  
+
+  

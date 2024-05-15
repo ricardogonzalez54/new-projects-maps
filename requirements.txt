@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+websockets
+wsproto
+clbb-hermes
+geopandas
+pandas
+pyarrow
+requests

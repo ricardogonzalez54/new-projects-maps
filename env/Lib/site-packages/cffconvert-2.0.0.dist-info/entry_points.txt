@@ -1,0 +1,3 @@
+[console_scripts]
+cffconvert = cffconvert.cli.cli:cli
+
