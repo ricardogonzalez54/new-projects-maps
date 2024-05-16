@@ -1,21 +1,47 @@
-from fastapi import FastAPI, WebSocket
+from fastapi import FastAPI, WebSocket, Depends
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from asyncio import sleep
-import hermes as hs
-import requests
+from sqlalchemy import create_engine, Column, Integer, Text
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker, Session
+from pydantic import BaseModel
+import json
 
+# Define el modelo de datos para la base de datos
+Base = declarative_base()
+
+class GeoJSONFeature(BaseModel):
+    type: str
+    geometry: dict
+    properties: dict
+
+class GeoJSONFeatureDB(Base):
+    __tablename__ = 'geojson_features'
+
+    id = Column(Integer, primary_key=True, index=True)
+    geometry = Column(Text)
+    properties = Column(Text)
+
+# Configura la conexión a la base de datos PostgreSQL
+SQLALCHEMY_DATABASE_URL = "postgresql://UserName:password@localhost/nobre_base_datos"
+engine = create_engine(SQLALCHEMY_DATABASE_URL)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+# Función para obtener la sesión de la base de datos
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 app = FastAPI()
 
-#Las lineas que contienen h usan la librería del Diego para acceder a la base de datos
-#h = hs.Handler()
-
-#h.server_address = "http://clbb-api:8001"
+# Monta directorio estático para servir archivos estáticos
 app.mount("/static", StaticFiles(directory="static"), name="static")
-#app.mount("/static/js", StaticFiles(directory="static/js"), name="js")
 
+# Middleware CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -24,6 +50,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Definición de conexiones WebSocket
 websocket_connections = set()
 conn_websocket_connections = set()
 
@@ -36,30 +63,36 @@ async def conn(response: dict):
     global conn_websocket_connections
     valor = response
     conn_websocket_connections = websocket_connections.copy()
-    #Las siguientes líneas son para acceder a la base de datos con algún hash
-    #aoi = h.load_amenities()
-    #paths = h.load_indicator_data('am_prox_by_node_points', '36399181abbf6087c5e3f77d806fae31e7179cda90967acb64abfb981ab0551c')
-    #print(paths)
-    #print(paths.loc[:,0])
-    #for connection in conn_websocket_connections:
-    #    await connection.send_json(aoi.to_json())
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
-    # Aceptar la conexión WebSocket
     await websocket.accept()
-    
-    # Agregar la conexión WebSocket a la lista general
     websocket_connections.add(websocket)
-
     try:
-        # Bucle para manejar mensajes entrantes
         while True:
-            # Leer mensaje del cliente
             data = await websocket.receive_json()
-            # Enviar mensaje a todos los clientes conectados
             for connection in conn_websocket_connections:
                 await connection.send_json(data)
     finally:
-        # Eliminar la conexión WebSocket cuando se cierra
         websocket_connections.remove(websocket)
+
+# Modificación del endpoint para guardar en la base de datos
+@app.post("/receive-geojson")
+async def receive_geojson(feature: GeoJSONFeature, db: Session = Depends(get_db)):
+    print("Datos GeoJSON recibidos:")
+    print(feature)
+
+    db_feature = GeoJSONFeatureDB(geometry=json.dumps(feature.geometry), properties=json.dumps(feature.properties))
+    db.add(db_feature)
+    db.commit()
+
+    geojson_str = feature.json()
+
+    with open("geojson_data.json", "w") as json_file:
+        json_file.write(geojson_str)
+
+    return {"message": "Datos GeoJSON exportados correctamente"}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=5353)
